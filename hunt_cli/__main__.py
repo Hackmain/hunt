@@ -312,70 +312,13 @@ def cmd_notify(args):
 
 
 def cmd_claude(args):
-    """Claude analyzes target and writes security assessment."""
-    print(f"\n🤖 CLAUDE ANALYZING: {args.target}\n")
-    print("Claude is reasoning about potential vulnerabilities and attack surfaces...")
-    print("Writing comprehensive security assessment...\n")
-
-    # Create a simple assessment template that Claude would write
-    assessment = f"""
-🔍 SECURITY ASSESSMENT: {args.target}
-
-CLAUDE'S ANALYSIS:
-
-Based on the target {args.target}, potential vulnerability areas to investigate:
-
-1. AUTHENTICATION WEAKNESSES
-   - Default credentials on common endpoints (/login, /admin, /api/auth)
-   - Weak session management or JWT implementation
-   - Lack of multi-factor authentication
-   - Credential stuffing vulnerabilities
-
-2. API VULNERABILITIES
-   - Missing authentication on API endpoints
-   - Broken object level authorization (BOLA)
-   - Information disclosure in API responses
-   - Insecure direct object references (IDOR)
-
-3. DATABASE SECURITY
-   - SQL injection in search/filter functions
-   - NoSQL injection vulnerabilities
-   - Exposed database credentials in code
-
-4. BUSINESS LOGIC FLAWS
-   - Race conditions in transactions
-   - Authorization bypass through parameter tampering
-   - Privilege escalation via role manipulation
-
-5. INFRASTRUCTURE
-   - Exposed configuration files (.env, .git, etc.)
-   - Outdated frameworks/libraries with known CVEs
-   - Server misconfigurations (CORS, headers)
-
-RECOMMENDATIONS FOR TESTING:
-- Enumerate subdomains and hidden endpoints
-- Test input validation on all user-facing forms
-- Review API authentication and authorization
-- Check for hardcoded credentials or secrets
-- Test session management and token handling
-
-SEVERITY: Requires authorized penetration testing
-AUTHORIZATION: Only test with explicit written permission from target organization
-
-Assessment completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-"""
-
-    print(assessment)
-
-    # Send to Telegram if configured
+    """Claude autonomously hunts a specific target and reports to Telegram."""
     try:
-        from . import telegram as tg
-        tg.send_message(assessment)
-        print("✓ Assessment sent to Telegram\n")
-    except:
-        print("⚠️  Telegram not configured (optional)\n")
-
-    return 0
+        claude_hunt.run_target_hunt(args.target)
+        return 0
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 def cmd_claude_hunt(args):

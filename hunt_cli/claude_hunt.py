@@ -5,6 +5,72 @@ from datetime import datetime
 from . import h1, telegram
 
 
+def build_target_prompt(target):
+    """Build autonomous hunting prompt for a specific target."""
+    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    telegram_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+    return f"""You are an autonomous bug bounty hunter. Bug hunting this "{target}".
+
+## Your Mission
+1. Run active security tests against {target} using bash tools (curl, nmap, whatweb, etc.).
+2. Test for: default creds, SQLi, XSS, open redirects, IDOR, exposed admin panels, missing auth, info disclosure, CORS misconfig, directory traversal, sensitive files (.env, .git, backup files).
+3. Confirm every finding is real before reporting.
+4. Send your report to Telegram when done.
+
+## Telegram Credentials
+TELEGRAM_BOT_TOKEN = {telegram_token}
+TELEGRAM_CHAT_ID   = {telegram_chat}
+
+Send report with:
+```
+curl -s -X POST "https://api.telegram.org/bot{telegram_token}/sendMessage" \\
+  -d chat_id="{telegram_chat}" \\
+  -d parse_mode="HTML" \\
+  -d text="<YOUR_REPORT_HERE>"
+```
+
+## Report Format
+```
+<b>🔍 BUG HUNT REPORT</b>
+<b>Target:</b> {target}
+<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+[findings or ✓ No vulnerabilities confirmed]
+
+<i>Hunted autonomously by Claude</i>
+```
+
+Start now. Test {target} and send the report to Telegram when done.
+"""
+
+
+def run_target_hunt(target):
+    """Launch Claude CLI to autonomously hunt a specific target."""
+    if not target.startswith(("http://", "https://")):
+        target = f"https://{target}"
+
+    print(f"\n🔍 CLAUDE BUG HUNTING: {target}\n")
+    print("🤖 Launching Claude CLI with --dangerously-skip-permissions...\n")
+    print("=" * 60)
+
+    env = os.environ.copy()
+    env.pop("ANTHROPIC_API_KEY", None)
+
+    prompt = build_target_prompt(target)
+
+    result = subprocess.run(
+        ["claude", "--dangerously-skip-permissions", "-p", prompt],
+        text=True,
+        env=env,
+    )
+
+    print("=" * 60)
+
+    if result.returncode != 0:
+        raise RuntimeError("Claude CLI exited with an error")
+
+
 def build_autonomous_prompt(programs, scopes_by_handle):
     """Build the full autonomous hunting prompt for Claude CLI."""
     programs_block = "\n".join([
