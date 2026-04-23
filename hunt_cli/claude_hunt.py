@@ -115,9 +115,13 @@ def run_intelligent_hunt(program_handle=None):
     print("\n🤖 Launching Claude CLI with --dangerously-skip-permissions...\n")
     print("=" * 60)
 
+    env = os.environ.copy()
+    env.pop("ANTHROPIC_API_KEY", None)  # use subscription auth, not API key
+
     result = subprocess.run(
         ["claude", "--dangerously-skip-permissions", "-p", prompt],
         text=True,
+        env=env,
     )
 
     print("=" * 60)
