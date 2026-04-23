@@ -5,42 +5,50 @@ from datetime import datetime
 from . import h1, telegram
 
 
-def build_target_prompt(target):
-    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    telegram_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-
-    return (
-        f'bug hunting this > "{target}" then report findings as hackerone report '
-        f'and send it to telegram bot {telegram_token} chat id {telegram_chat}'
+def _claude(message, env):
+    """Send a message to Claude CLI and return the full output."""
+    print(f"\n>>> {message[:80]}{'...' if len(message) > 80 else ''}\n")
+    result = subprocess.run(
+        ["claude", "--dangerously-skip-permissions", "-p", message],
+        capture_output=True,
+        text=True,
+        env=env,
     )
+    if result.returncode != 0:
+        raise RuntimeError(f"Claude error: {result.stderr.strip()}")
+    return result.stdout.strip()
 
 
 def run_target_hunt(target):
-    """Launch Claude CLI to autonomously hunt a specific target."""
+    """4-step autonomous hunt: open claude → hunt → generate H1 report → send to Telegram."""
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
-
-    print(f"\n🔍 CLAUDE BUG HUNTING: {target}\n")
-    print("🤖 Launching Claude CLI with --dangerously-skip-permissions...\n")
-    print("=" * 60)
 
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
-    # Pipe message to Claude's stdin — same as typing in the interactive chat
-    message = build_target_prompt(target)
-
-    result = subprocess.run(
-        ["claude", "--dangerously-skip-permissions"],
-        input=message,
-        text=True,
-        env=env,
-    )
-
+    # Step 1 + 2: Bug hunting
+    print(f"\n🔍 STEP 1: Bug hunting {target}")
     print("=" * 60)
+    findings = _claude(f'bug hunting this > "{target}"', env)
+    print(findings)
 
-    if result.returncode != 0:
-        raise RuntimeError("Claude CLI exited with an error")
+    # Step 3: Generate HackerOne report with CWE ID and asset
+    print("\n📋 STEP 2: Generating HackerOne report...")
+    print("=" * 60)
+    report = _claude(
+        f"make hackerone report with cwe id and asset from these findings:\n\n{findings}",
+        env,
+    )
+    print(report)
+
+    # Step 4: Send to Telegram
+    print("\n📤 STEP 3: Sending report to Telegram...")
+    try:
+        telegram.send_message(f"<b>🔍 Bug Hunt: {target}</b>\n\n{report}")
+        print("✓ Report sent to Telegram")
+    except telegram.TelegramError as e:
+        print(f"⚠️  Telegram error: {e}")
 
 
 def build_autonomous_prompt(programs, scopes_by_handle):
