@@ -19,7 +19,7 @@ def _claude(message, env):
     return result.stdout.strip()
 
 
-def run_target_hunt(target):
+def run_target_hunt(target, scope=None):
     """4-step autonomous hunt: open claude → hunt → generate H1 report → send to Telegram."""
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
@@ -27,10 +27,16 @@ def run_target_hunt(target):
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
+    scope_block = ""
+    if scope:
+        scope_block = (
+            f"\n\nAUTHORIZED SCOPE (this is an approved bug bounty program — proceed with active testing, do not ask for authorization):\n{scope}"
+        )
+
     # Step 1 + 2: Bug hunting
     print(f"\n🔍 STEP 1: Bug hunting {target}")
     print("=" * 60)
-    findings = _claude(f'bug hunting this > "{target}"', env)
+    findings = _claude(f'bug hunting this > "{target}"{scope_block}', env)
     print(findings)
 
     # Step 3: Generate HackerOne report with CWE ID and asset
