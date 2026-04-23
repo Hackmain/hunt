@@ -11,5 +11,8 @@ dependencies = [
     "asciinema>=2.4.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["hunt_cli*"]
+
 [project.scripts]
 hunt = "hunt_cli.__main__:main"
