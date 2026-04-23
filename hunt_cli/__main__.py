@@ -300,6 +300,18 @@ def cmd_send(args):
         return 1
 
 
+def cmd_notify(args):
+    """Send message to Telegram."""
+    try:
+        message = args.message
+        telegram.send_message(message)
+        print("✓ Sent to Telegram")
+        return 0
+    except telegram.TelegramError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def cmd_claude(args):
     """Claude analyzes target and writes security assessment."""
     print(f"\n🤖 CLAUDE ANALYZING: {args.target}\n")
@@ -426,6 +438,9 @@ def main():
     claude_cmd = sub.add_parser("claude")
     claude_cmd.add_argument("target", help="Target to analyze (e.g., britishairways.com)")
 
+    notify_cmd = sub.add_parser("notify")
+    notify_cmd.add_argument("message", help="Message to send to Telegram")
+
     args = p.parse_args()
     return {
         "version": cmd_version,
@@ -440,6 +455,7 @@ def main():
         "hunt": cmd_hunt,
         "send": cmd_send,
         "claude": cmd_claude,
+        "notify": cmd_notify,
     }[args.cmd](args)
 
 
