@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import h1, report, telegram, session, scanner, automate
+from . import h1, report, telegram, session, scanner, automate, autonomous
 
 REQUIRED_SECRETS = [
     "ANTHROPIC_API_KEY",
@@ -279,6 +279,16 @@ def cmd_auto(args):
         return 1
 
 
+def cmd_hunt(args):
+    """Autonomous hunting agent - discovers and tests all targets."""
+    try:
+        hunter = autonomous.start_autonomous_hunt(args.program, args.domain)
+        return 0
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def main():
     p = argparse.ArgumentParser(prog="hunt")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -329,6 +339,10 @@ def main():
     auto.add_argument("program", help="Program name (e.g., british_airways_vdp)")
     auto.add_argument("target", help="Target URL (e.g., https://example.com)")
 
+    hunt_cmd = sub.add_parser("hunt")
+    hunt_cmd.add_argument("program", help="Program name (e.g., british_airways_vdp)")
+    hunt_cmd.add_argument("domain", help="Domain to hunt (e.g., britishairways.com)")
+
     args = p.parse_args()
     return {
         "version": cmd_version,
@@ -340,6 +354,7 @@ def main():
         "session": cmd_session,
         "scan": cmd_scan,
         "auto": cmd_auto,
+        "hunt": cmd_hunt,
     }[args.cmd](args)
 
 
