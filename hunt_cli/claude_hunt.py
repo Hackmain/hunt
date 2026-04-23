@@ -6,43 +6,13 @@ from . import h1, telegram
 
 
 def build_target_prompt(target):
-    """Build autonomous hunting prompt for a specific target."""
     telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     telegram_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-    return f"""You are an autonomous bug bounty hunter. Bug hunting this "{target}".
-
-## Your Mission
-1. Run active security tests against {target} using bash tools (curl, nmap, whatweb, etc.).
-2. Test for: default creds, SQLi, XSS, open redirects, IDOR, exposed admin panels, missing auth, info disclosure, CORS misconfig, directory traversal, sensitive files (.env, .git, backup files).
-3. Confirm every finding is real before reporting.
-4. Send your report to Telegram when done.
-
-## Telegram Credentials
-TELEGRAM_BOT_TOKEN = {telegram_token}
-TELEGRAM_CHAT_ID   = {telegram_chat}
-
-Send report with:
-```
-curl -s -X POST "https://api.telegram.org/bot{telegram_token}/sendMessage" \\
-  -d chat_id="{telegram_chat}" \\
-  -d parse_mode="HTML" \\
-  -d text="<YOUR_REPORT_HERE>"
-```
-
-## Report Format
-```
-<b>🔍 BUG HUNT REPORT</b>
-<b>Target:</b> {target}
-<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}
-
-[findings or ✓ No vulnerabilities confirmed]
-
-<i>Hunted autonomously by Claude</i>
-```
-
-Start now. Test {target} and send the report to Telegram when done.
-"""
+    return (
+        f'bug hunting this > "{target}" then report findings as hackerone report '
+        f'and send it to telegram bot {telegram_token} chat id {telegram_chat}'
+    )
 
 
 def run_target_hunt(target):
