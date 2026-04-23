@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from . import h1, report, telegram, session, scanner, automate, autonomous, reporter
+from . import h1, report, telegram, session, scanner, automate, autonomous, reporter, claude_hunt
 
 REQUIRED_SECRETS = [
     "ANTHROPIC_API_KEY",
@@ -379,6 +379,16 @@ Assessment completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     return 0
 
 
+def cmd_claude_hunt(args):
+    """Claude intelligently selects H1 program & target, then hunts for vulnerabilities."""
+    try:
+        claude_hunt.run_intelligent_hunt(args.program if args.program else None)
+        return 0
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def main():
     p = argparse.ArgumentParser(prog="hunt")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -438,6 +448,9 @@ def main():
     claude_cmd = sub.add_parser("claude")
     claude_cmd.add_argument("target", help="Target to analyze (e.g., britishairways.com)")
 
+    claude_hunt_cmd = sub.add_parser("claude-hunt", help="Claude intelligently hunts H1 programs")
+    claude_hunt_cmd.add_argument("--program", default=None, help="Specific program to hunt (optional, Claude picks if not specified)")
+
     notify_cmd = sub.add_parser("notify")
     notify_cmd.add_argument("message", help="Message to send to Telegram")
 
@@ -455,6 +468,7 @@ def main():
         "hunt": cmd_hunt,
         "send": cmd_send,
         "claude": cmd_claude,
+        "claude-hunt": cmd_claude_hunt,
         "notify": cmd_notify,
     }[args.cmd](args)
 
