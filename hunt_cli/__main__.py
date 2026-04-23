@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import h1, report, telegram
+from . import h1, report, telegram, session
 
 REQUIRED_SECRETS = [
     "ANTHROPIC_API_KEY",
@@ -180,6 +180,63 @@ def cmd_report(args):
         return 1
 
 
+def cmd_session(args):
+    try:
+        if args.action == "start":
+            s = session.start_session(args.program, args.notes or "")
+            limit_check = session.check_daily_limit()
+            if limit_check["exceeded"]:
+                print("error: 5-hour daily limit reached", file=sys.stderr)
+                return 1
+            print(f"session started: {args.program}")
+            if limit_check["warning"]:
+                print(f"⚠️  WARNING: {session.format_time(limit_check['remaining'])} remaining today")
+            return 0
+
+        elif args.action == "pause":
+            s = session.pause_session()
+            print(f"session paused: {s['program']}")
+            return 0
+
+        elif args.action == "resume":
+            s = session.resume_session()
+            print(f"session resumed: {s['program']}")
+            return 0
+
+        elif args.action == "stop":
+            s, elapsed = session.stop_session()
+            session.log_session_end(s["program"], elapsed)
+            limit_check = session.check_daily_limit()
+            print(f"session stopped: {s['program']}")
+            print(f"  Duration: {session.format_time(elapsed)}")
+            print(f"  Daily total: {session.format_time(limit_check['daily_total'])}")
+            if limit_check["warning"]:
+                print(f"  ⚠️  {session.format_time(limit_check['remaining'])} remaining")
+            return 0
+
+        elif args.action == "status":
+            current = session.get_current_session()
+            if not current:
+                print("no session in progress")
+            else:
+                s = current["session"]
+                elapsed = current["elapsed_seconds"]
+                status = "paused" if current["is_paused"] else "active"
+                print(f"current session: {s['program']} ({status})")
+                print(f"  Elapsed: {session.format_time(elapsed)}")
+
+            limit_check = session.check_daily_limit()
+            print(f"  Daily total: {session.format_time(limit_check['daily_total'])}")
+            print(f"  Remaining: {session.format_time(limit_check['remaining'])}")
+            if limit_check["warning"]:
+                print(f"  ⚠️  Approaching daily limit!")
+            return 0
+
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def main():
     p = argparse.ArgumentParser(prog="hunt")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -212,6 +269,16 @@ def main():
     rep_sub.add_parser("list")
     rep_sub.add_parser("send").add_argument("name")
 
+    sess = sub.add_parser("session")
+    sess_sub = sess.add_subparsers(dest="action", required=True)
+    sess_start = sess_sub.add_parser("start")
+    sess_start.add_argument("program")
+    sess_start.add_argument("--notes", default="")
+    sess_sub.add_parser("pause")
+    sess_sub.add_parser("resume")
+    sess_sub.add_parser("stop")
+    sess_sub.add_parser("status")
+
     args = p.parse_args()
     return {
         "version": cmd_version,
@@ -220,6 +287,7 @@ def main():
         "scope": cmd_scope,
         "rec": cmd_rec,
         "report": cmd_report,
+        "session": cmd_session,
     }[args.cmd](args)
 
 
