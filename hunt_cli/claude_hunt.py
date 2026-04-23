@@ -1,13 +1,31 @@
 """Claude-powered intelligent bug hunting - auto selects programs and targets."""
 import json
 import os
+import sys
+import subprocess
 from datetime import datetime
-import anthropic
 from . import h1, scanner, telegram
+
+
+def _ensure_anthropic():
+    """Lazy import - install anthropic if missing."""
+    try:
+        import anthropic
+        return anthropic
+    except ImportError:
+        print("📦 Installing anthropic package (first run)...")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--quiet", "anthropic"],
+            stdout=subprocess.DEVNULL,
+        )
+        import anthropic
+        print("✓ anthropic installed")
+        return anthropic
 
 
 def get_claude_program_selection(programs):
     """Use Claude to intelligently select best program to hunt."""
+    anthropic = _ensure_anthropic()
     if not programs:
         raise ValueError("No programs available")
 
@@ -46,6 +64,7 @@ Respond with ONLY the program handle (e.g., "example_program"), nothing else."""
 
 def get_claude_target_selection(handle, scopes):
     """Use Claude to intelligently select best target from scope."""
+    anthropic = _ensure_anthropic()
     if not scopes:
         raise ValueError(f"No targets in scope for {handle}")
 
