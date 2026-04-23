@@ -44,9 +44,15 @@ def run_target_hunt(target):
 
     # Step 4: Send to Telegram
     print("\n📤 STEP 3: Sending report to Telegram...")
+    import tempfile, pathlib, re
+
     try:
-        telegram.send_message(f"<b>🔍 Bug Hunt: {target}</b>\n\n{report}")
-        print("✓ Report sent to Telegram")
+        # Save report to a temp .md file and send as document
+        safe = re.sub(r"[^\w]", "_", target.replace("https://", "").replace("http://", ""))[:40]
+        fname = pathlib.Path(tempfile.gettempdir()) / f"hunt_{safe}.md"
+        fname.write_text(f"# Bug Hunt: {target}\n\n{report}")
+        telegram.send_document(str(fname), caption=f"<b>🔍 Bug Hunt: {target}</b>")
+        print("✓ Report sent to Telegram as file")
     except telegram.TelegramError as e:
         print(f"⚠️  Telegram error: {e}")
 
