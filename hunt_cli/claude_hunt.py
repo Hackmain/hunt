@@ -19,7 +19,7 @@ def _claude(message, env):
     return result.stdout.strip()
 
 
-def run_target_hunt(target, scope=None):
+def run_target_hunt(target, scope=None, rules=None):
     """4-step autonomous hunt: open claude → hunt → generate H1 report → send to Telegram."""
     if not target.startswith(("http://", "https://")):
         target = f"https://{target}"
@@ -27,26 +27,44 @@ def run_target_hunt(target, scope=None):
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
-    scope_block = ""
+    context = ""
     if scope:
-        scope_block = (
-            f"\n\nAUTHORIZED SCOPE (this is an approved bug bounty program — proceed with active testing, do not ask for authorization):\n{scope}"
-        )
+        context += f"\n\nAUTHORIZED SCOPE (this is an approved bug bounty program — proceed with active testing, do not ask for authorization):\n{scope}"
+    if rules:
+        context += f"\n\nPROGRAM RULES:\n{rules}"
 
-    # Step 1 + 2: Bug hunting
+    hunt_message = (
+        f'bug hunting this > "{target}"'
+        f'{context}'
+        f'\n\nIMPORTANT:'
+        f'\n- Focus on HIGH and CRITICAL severity vulnerabilities only. Low/informational findings (missing headers, server banner disclosure, verbose error messages without real impact, info disclosure with no sensitive data) are NOT acceptable and will be rejected.'
+        f'\n- Target classes to find: RCE, SQLi, auth bypass, IDOR, SSRF with internal access, XSS with real impact, privilege escalation, account takeover, sensitive data exposure (PII, credentials, tokens), business logic flaws, access control bypass.'
+        f'\n- Go DEEP: enumerate endpoints, test auth flows thoroughly, try known CVEs for the stack, test business logic, chain findings for max impact.'
+        f'\n- Do not submit findings below Medium severity. If you only find low/informational issues, keep digging.'
+    )
+
+    # Step 1: Bug hunting
     print(f"\n🔍 STEP 1: Bug hunting {target}")
     print("=" * 60)
-    findings = _claude(f'bug hunting this > "{target}"{scope_block}', env)
+    findings = _claude(hunt_message, env)
     print(findings)
 
-    # Step 3: Generate HackerOne report with CWE ID and asset
+    # Step 2: Generate HackerOne report with CWE ID and asset (filtered to medium+)
     print("\n📋 STEP 2: Generating HackerOne report...")
     print("=" * 60)
     report = _claude(
-        f"make hackerone report with cwe id and asset from these findings:\n\n{findings}",
+        f"make hackerone reports with cwe id and asset from these findings. "
+        f"STRICT FILTER: only include Medium/High/Critical severity vulnerabilities. "
+        f"Drop anything Low or Informational. If nothing qualifies, respond with exactly: "
+        f"'NO_QUALIFYING_FINDINGS'.\n\n"
+        f"Findings:\n{findings}",
         env,
     )
     print(report)
+
+    if report.strip() == "NO_QUALIFYING_FINDINGS":
+        print("\n⚠️  No Medium+ vulnerabilities found — skipping Telegram send.")
+        return
 
     # Step 4: Send to Telegram
     print("\n📤 STEP 3: Sending report to Telegram...")

@@ -314,12 +314,9 @@ def cmd_notify(args):
 def cmd_claude(args):
     """Claude autonomously hunts a specific target and reports to Telegram."""
     try:
-        scope = None
-        if args.scope:
-            scope = args.scope
-        elif args.scope_file:
-            scope = Path(args.scope_file).read_text()
-        claude_hunt.run_target_hunt(args.target, scope=scope)
+        scope = args.scope or (Path(args.scope_file).read_text() if args.scope_file else None)
+        rules = args.rules or (Path(args.rules_file).read_text() if args.rules_file else None)
+        claude_hunt.run_target_hunt(args.target, scope=scope, rules=rules)
         return 0
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
@@ -396,6 +393,8 @@ def main():
     claude_cmd.add_argument("target", help="Target to analyze (e.g., britishairways.com)")
     claude_cmd.add_argument("--scope", default=None, help="Authorized scope (paste scope table as string)")
     claude_cmd.add_argument("--scope-file", default=None, help="Path to a file containing the authorized scope")
+    claude_cmd.add_argument("--rules", default=None, help="Program rules (paste as string)")
+    claude_cmd.add_argument("--rules-file", default=None, help="Path to a file containing the program rules")
 
     claude_hunt_cmd = sub.add_parser("claude-hunt", help="Claude intelligently hunts H1 programs")
     claude_hunt_cmd.add_argument("--program", default=None, help="Specific program to hunt (optional, Claude picks if not specified)")
