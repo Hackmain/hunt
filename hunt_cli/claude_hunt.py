@@ -1,117 +1,92 @@
-"""Claude-powered intelligent bug hunting - auto selects programs and targets."""
-import json
+"""Claude-powered autonomous bug hunting - fetches H1 scope and lets Claude CLI do the work."""
 import os
-import sys
 import subprocess
 from datetime import datetime
-from . import h1, scanner, telegram
+from . import h1, telegram
 
 
-def _ensure_anthropic():
-    """Lazy import - install anthropic if missing."""
-    try:
-        import anthropic
-        return anthropic
-    except ImportError:
-        print("📦 Installing anthropic package (first run)...")
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "--quiet", "anthropic"],
-            stdout=subprocess.DEVNULL,
-        )
-        import anthropic
-        print("✓ anthropic installed")
-        return anthropic
-
-
-def get_claude_program_selection(programs):
-    """Use Claude to intelligently select best program to hunt."""
-    anthropic = _ensure_anthropic()
-    if not programs:
-        raise ValueError("No programs available")
-
-    programs_text = "\n".join([
-        f"- {p['attributes']['handle']}: {p['attributes']['name']}"
-        for p in programs
+def build_autonomous_prompt(programs, scopes_by_handle):
+    """Build the full autonomous hunting prompt for Claude CLI."""
+    programs_block = "\n".join([
+        f"  - handle: {p['attributes']['handle']}  name: {p['attributes']['name']}"
+        for p in programs[:30]
     ])
 
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-
-    message = client.messages.create(
-        model="claude-opus-4-7",
-        max_tokens=500,
-        messages=[
-            {
-                "role": "user",
-                "content": f"""You are a security researcher selecting a bug bounty program to hunt.
-
-Available programs:
-{programs_text}
-
-Choose ONE program that would likely have the most security vulnerabilities based on:
-1. Program size and complexity (larger is better)
-2. Technology stack hints from the name
-3. Likelihood of finding exploitable bugs
-
-Respond with ONLY the program handle (e.g., "example_program"), nothing else."""
-            }
+    scopes_block = ""
+    for handle, scopes in scopes_by_handle.items():
+        in_scope = [
+            s for s in scopes
+            if s.get("attributes", {}).get("eligible_for_submission")
         ]
-    )
+        if not in_scope:
+            continue
+        scopes_block += f"\n[{handle}]\n"
+        for s in in_scope[:10]:
+            a = s["attributes"]
+            scopes_block += f"  {a['asset_type']:<15} {a['asset_identifier']}\n"
 
-    handle = message.content[0].text.strip()
-    print(f"🤖 Claude selected program: {handle}")
-    return handle
+    telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    telegram_chat = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+    return f"""You are an autonomous bug bounty hunter. Your job is to find real vulnerabilities in HackerOne programs and report them.
 
-def get_claude_target_selection(handle, scopes):
-    """Use Claude to intelligently select best target from scope."""
-    anthropic = _ensure_anthropic()
-    if not scopes:
-        raise ValueError(f"No targets in scope for {handle}")
+## HackerOne Programs Available
+{programs_block}
 
-    in_scope = [s for s in scopes if s.get("attributes", {}).get("eligible_for_submission")]
-    if not in_scope:
-        raise ValueError(f"No eligible targets for {handle}")
+## In-Scope Targets (per program)
+{scopes_block}
 
-    targets_text = "\n".join([
-        f"- {s['attributes']['asset_identifier']} ({s['attributes']['asset_type']})"
-        for s in in_scope[:20]  # Limit to first 20 for context
-    ])
+## Your Mission
+1. Pick the single best program and target from the lists above (prefer web apps over mobile/hardware).
+2. Run active security tests against that target using bash tools (curl, nmap, whatweb, etc.).
+3. Test for common vulnerabilities: default creds, SQLi, XSS, open redirects, IDOR, exposed admin panels, missing auth, info disclosure, CORS misconfig, directory traversal.
+4. For each finding: confirm it is real (not a false positive) before reporting.
+5. Format a Telegram report and send it using the bot credentials below.
 
-    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+## Telegram Credentials (already set in environment)
+TELEGRAM_BOT_TOKEN = {telegram_token}
+TELEGRAM_CHAT_ID   = {telegram_chat}
 
-    message = client.messages.create(
-        model="claude-opus-4-7",
-        max_tokens=500,
-        messages=[
-            {
-                "role": "user",
-                "content": f"""You are selecting a target to test for security vulnerabilities.
+Send your final report with this curl command (fill in the message):
+```
+curl -s -X POST "https://api.telegram.org/bot{telegram_token}/sendMessage" \\
+  -d chat_id="{telegram_chat}" \\
+  -d parse_mode="HTML" \\
+  -d text="<YOUR_REPORT_HERE>"
+```
 
-Available targets in scope:
-{targets_text}
+## Report Format
+```
+<b>🔍 BUG HUNT REPORT</b>
+<b>Program:</b> [handle]
+<b>Target:</b> [url]
+<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-Choose ONE target that is most likely to have exploitable security vulnerabilities based on:
-1. Web applications are typically better targets than mobile/hardware
-2. Complex systems more likely than simple APIs
-3. Look for common patterns that typically have bugs (login, payment, file upload)
+[If findings:]
+<b>⚠️ Vulnerabilities Found:</b>
 
-Respond with ONLY the exact target identifier (e.g., "api.example.com"), nothing else."""
-            }
-        ]
-    )
+<b>[SEVERITY]</b> [Type]
+  Endpoint: [url]
+  Evidence: [proof]
+  CWE: [number]
+  CVSS: [score]
 
-    target = message.content[0].text.strip()
-    print(f"🤖 Claude selected target: {target}")
-    return target
+[If no findings:]
+<b>✓ No vulnerabilities confirmed on this target.</b>
+
+<i>Hunted autonomously by Claude</i>
+```
+
+Start now. Pick your target, run your tests, and send the report to Telegram when done.
+"""
 
 
 def run_intelligent_hunt(program_handle=None):
-    """Run Claude-powered hunting: select program, select target, scan, report."""
+    """Fetch H1 scope then launch Claude CLI to hunt autonomously."""
 
-    print("\n🔍 CLAUDE BUG HUNTING - INTELLIGENT MODE\n")
+    print("\n🔍 CLAUDE AUTONOMOUS BUG HUNT\n")
 
-    # Get all programs
-    print("📋 Fetching available programs...")
+    print("📋 Fetching programs from HackerOne...")
     try:
         programs = h1.list_programs()
     except h1.H1Error as e:
@@ -120,91 +95,34 @@ def run_intelligent_hunt(program_handle=None):
     if not programs:
         raise ValueError("No programs available")
 
-    print(f"Found {len(programs)} programs")
-
-    # Let Claude select program if not specified
-    if not program_handle:
-        selected_handle = get_claude_program_selection(programs)
+    # If specific program requested, only fetch that scope; otherwise sample top 5
+    if program_handle:
+        target_programs = [p for p in programs if p["attributes"]["handle"] == program_handle]
     else:
-        selected_handle = program_handle
+        target_programs = programs[:5]
 
-    # Get scopes for selected program
-    print(f"📍 Fetching targets for {selected_handle}...")
-    try:
-        scopes = h1.program_scopes(selected_handle)
-    except h1.H1Error as e:
-        raise ValueError(f"Failed to fetch scopes for {selected_handle}: {e}")
+    scopes_by_handle = {}
+    for p in target_programs:
+        handle = p["attributes"]["handle"]
+        print(f"  Fetching scope for {handle}...")
+        try:
+            scopes_by_handle[handle] = h1.program_scopes(handle)
+        except h1.H1Error:
+            scopes_by_handle[handle] = []
 
-    # Let Claude select target
-    target = get_claude_target_selection(selected_handle, scopes)
+    prompt = build_autonomous_prompt(programs, scopes_by_handle)
 
-    # Normalize target to URL
-    if not target.startswith(("http://", "https://")):
-        target_url = f"https://{target}"
-    else:
-        target_url = target
+    print("\n🤖 Launching Claude CLI with --dangerously-skip-permissions...\n")
+    print("=" * 60)
 
-    # Run scan
-    print(f"\n🔨 Scanning {target_url}...")
-    try:
-        results = scanner.scan_target(target_url, selected_handle)
-    except scanner.ScannerError as e:
-        raise ValueError(f"Scan failed: {e}")
+    result = subprocess.run(
+        ["claude", "--dangerously-skip-permissions", "-p", prompt],
+        text=True,
+    )
 
-    # Generate report
-    report = generate_hunt_report(selected_handle, target, results)
+    print("=" * 60)
 
-    # Send to Telegram
-    print("📤 Sending to Telegram...")
-    try:
-        telegram.send_message(report)
-        print("✓ Report sent to Telegram")
-    except telegram.TelegramError as e:
-        print(f"⚠️  Failed to send to Telegram: {e}")
+    if result.returncode != 0:
+        raise RuntimeError("Claude CLI exited with an error")
 
-    # Print summary
-    print(f"\n{'='*60}")
-    print(f"Program: {selected_handle}")
-    print(f"Target: {target}")
-    if results["findings"]:
-        print(f"Vulnerabilities found: {len(results['findings'])}")
-        for finding in results["findings"]:
-            print(f"  - [{finding['severity']}] {finding['type']}")
-    else:
-        print("No vulnerabilities found")
-    print(f"{'='*60}\n")
-
-    return {
-        "program": selected_handle,
-        "target": target,
-        "findings": results["findings"]
-    }
-
-
-def generate_hunt_report(program, target, results):
-    """Format hunt results for Telegram."""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    report = f"""<b>🔍 CLAUDE INTELLIGENT BUG HUNT</b>
-
-<b>Program:</b> {program}
-<b>Target:</b> {target}
-<b>Time:</b> {timestamp}
-
-"""
-
-    if results["findings"]:
-        report += f"<b>⚠️  Found {len(results['findings'])} vulnerabilities:</b>\n\n"
-        for finding in results["findings"]:
-            report += f"<b>[{finding['severity']}]</b> {finding['type']}\n"
-            report += f"  CWE: {finding.get('cwe', 'N/A')}\n"
-            report += f"  CVSS: {finding.get('cvss', 'N/A')}\n"
-            if "endpoint" in finding:
-                report += f"  Endpoint: {finding['endpoint']}\n"
-            report += "\n"
-    else:
-        report += "<b>✓ No vulnerabilities found</b>\n"
-
-    report += f"\n<i>Scanned and reported by Claude Intelligence Engine</i>"
-
-    return report
+    return {"status": "complete"}

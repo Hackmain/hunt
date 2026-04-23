@@ -9,7 +9,6 @@ from pathlib import Path
 from . import h1, report, telegram, session, scanner, automate, autonomous, reporter, claude_hunt
 
 REQUIRED_SECRETS = [
-    "ANTHROPIC_API_KEY",
     "HACKERONE_USERNAME",
     "HACKERONE_TOKEN",
     "TELEGRAM_BOT_TOKEN",
