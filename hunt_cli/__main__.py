@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import h1, report
+from . import h1, report, telegram
 
 REQUIRED_SECRETS = [
     "ANTHROPIC_API_KEY",
@@ -161,6 +161,20 @@ def cmd_report(args):
                 print(f"  {name:<30} ({count} findings)")
             return 0
 
+        elif args.action == "send":
+            r = report.load_report(args.name)
+            md = report.generate_markdown(r)
+            md_file = Path("drafts") / f"{args.name}.md"
+            Path("drafts").mkdir(exist_ok=True)
+            md_file.write_text(md)
+            try:
+                telegram.send_message(f"<b>{r['program']} Report</b>\n\n{md}")
+                print(f"report sent to Telegram: {args.name}")
+                return 0
+            except telegram.TelegramError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 1
+
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
@@ -196,6 +210,7 @@ def main():
     rep_add.add_argument("--asset", default="")
     rep_sub.add_parser("view").add_argument("name")
     rep_sub.add_parser("list")
+    rep_sub.add_parser("send").add_argument("name")
 
     args = p.parse_args()
     return {
