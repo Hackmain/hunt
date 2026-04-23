@@ -57,10 +57,12 @@ def run_target_hunt(target):
     env = os.environ.copy()
     env.pop("ANTHROPIC_API_KEY", None)
 
-    prompt = build_target_prompt(target)
+    # Pipe message to Claude's stdin — same as typing in the interactive chat
+    message = build_target_prompt(target)
 
     result = subprocess.run(
-        ["claude", "--dangerously-skip-permissions", "-p", prompt],
+        ["claude", "--dangerously-skip-permissions"],
+        input=message,
         text=True,
         env=env,
     )
@@ -185,7 +187,8 @@ def run_intelligent_hunt(program_handle=None):
     env.pop("ANTHROPIC_API_KEY", None)  # use subscription auth, not API key
 
     result = subprocess.run(
-        ["claude", "--dangerously-skip-permissions", "-p", prompt],
+        ["claude", "--dangerously-skip-permissions"],
+        input=prompt,
         text=True,
         env=env,
     )
