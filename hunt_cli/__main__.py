@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import h1, report, telegram, session
+from . import h1, report, telegram, session, scanner
 
 REQUIRED_SECRETS = [
     "ANTHROPIC_API_KEY",
@@ -237,6 +237,37 @@ def cmd_session(args):
         return 1
 
 
+def cmd_scan(args):
+    try:
+        print(f"🔍 Starting automated scan of {args.target}")
+        results = scanner.scan_target(args.target, args.program)
+
+        if not results["findings"]:
+            print("✓ No vulnerabilities found")
+            return 0
+
+        print(f"\n⚠️  Found {len(results['findings'])} potential vulnerabilities:\n")
+        for finding in results["findings"]:
+            print(f"  [{finding['severity']}] {finding['type']}")
+            print(f"    CWE: {finding['cwe']}")
+            print(f"    CVSS: {finding['cvss']}")
+            if "endpoint" in finding:
+                print(f"    Endpoint: {finding['endpoint']}")
+            print()
+
+        # Save results
+        filename = scanner.save_scan_results(results)
+        print(f"✓ Results saved to: {filename}")
+
+        # Ask user if they want to create report
+        print("\n📋 Create report from findings? (manual: run 'hunt report new')")
+        return 0
+
+    except scanner.ScannerError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def main():
     p = argparse.ArgumentParser(prog="hunt")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -279,6 +310,10 @@ def main():
     sess_sub.add_parser("stop")
     sess_sub.add_parser("status")
 
+    scan = sub.add_parser("scan")
+    scan.add_argument("target", help="Target URL (e.g., https://example.com)")
+    scan.add_argument("program", help="Program name (e.g., british_airways_vdp)")
+
     args = p.parse_args()
     return {
         "version": cmd_version,
@@ -288,6 +323,7 @@ def main():
         "rec": cmd_rec,
         "report": cmd_report,
         "session": cmd_session,
+        "scan": cmd_scan,
     }[args.cmd](args)
 
 
