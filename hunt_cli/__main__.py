@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import h1, report, telegram, session, scanner, automate, autonomous
+from . import h1, report, telegram, session, scanner, automate, autonomous, reporter
 
 REQUIRED_SECRETS = [
     "ANTHROPIC_API_KEY",
@@ -289,6 +289,16 @@ def cmd_hunt(args):
         return 1
 
 
+def cmd_send(args):
+    """Analyze latest scan and send report to Telegram."""
+    try:
+        reporter.watch_and_report()
+        return 0
+    except Exception as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def main():
     p = argparse.ArgumentParser(prog="hunt")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -343,6 +353,8 @@ def main():
     hunt_cmd.add_argument("program", help="Program name (e.g., british_airways_vdp)")
     hunt_cmd.add_argument("domain", help="Domain to hunt (e.g., britishairways.com)")
 
+    sub.add_parser("send", help="Analyze latest scan and send report to Telegram")
+
     args = p.parse_args()
     return {
         "version": cmd_version,
@@ -355,6 +367,7 @@ def main():
         "scan": cmd_scan,
         "auto": cmd_auto,
         "hunt": cmd_hunt,
+        "send": cmd_send,
     }[args.cmd](args)
 
 
