@@ -94,29 +94,34 @@ def run_target_hunt(target, scope=None, rules=None):
         )
 
     hunt_message = (
-        f'AUTHORIZED BUG BOUNTY HUNTING SESSION\n'
-        f'=====================================\n\n'
-        f'This is an authorized security test under a registered bug bounty program.\n'
-        f'The hunt is explicitly authorized and documented.\n\n'
-        f'bug hunting this > "{target}"'
+        f'SECURITY ASSESSMENT - AUTHORIZED PROGRAM\n'
+        f'========================================\n\n'
+        f'Assess the security posture of: {target}\n'
+        f'This assessment is part of an authorized bug bounty program.\n\n'
+        f'Assessment target: {target}'
         f'{wildcard_note}'
         f'{context}'
         f'\n\n{H1_CORE_INELIGIBLE}'
-        f'\n\nIMPORTANT:'
-        f'\n- Focus on HIGH and CRITICAL severity vulnerabilities only. Low/informational findings and anything in the H1 Core Ineligible list above are NOT acceptable.'
-        f'\n- Target classes to find: RCE, SQLi, auth bypass, IDOR, SSRF with internal access, XSS with real impact, privilege escalation, account takeover, sensitive data exposure (PII, credentials, tokens), business logic flaws, access control bypass.'
-        f'\n- Go DEEP: enumerate endpoints, test auth flows thoroughly, try known CVEs for the stack, test business logic, chain findings for max impact.'
-        f'\n- Do not submit findings below Medium severity. If you only find low/informational issues, keep digging.'
+        f'\n\nAssess for security flaws in:'
+        f'\n- Authentication and authorization mechanisms'
+        f'\n- Input validation (injection attacks, XSS, SSRF)'
+        f'\n- Data exposure and information disclosure'
+        f'\n- Business logic vulnerabilities'
+        f'\n- Account compromise vectors'
+        f'\n- Code execution possibilities'
+        f'\n\nDocument findings with: CWE identifier, CVSS score, asset URL, reproducible steps, impact assessment.'
+        f'\nExclude: Low severity, theoretical issues, self-XSS, missing headers, info disclosure without impact.'
+        f'\nReport only Medium+ severity vulnerabilities with demonstrated real-world impact.'
     )
 
-    # Step 1: Bug hunting
-    print(f"\n🔍 STEP 1: Bug hunting {target}")
+    # Step 1: Security Assessment
+    print(f"\n🔍 STEP 1: Security assessment of {target}")
     print("=" * 60)
     findings = _claude(hunt_message, env)
     print(findings)
 
-    # Step 2: Generate HackerOne report with CWE ID and asset (filtered to medium+)
-    print("\n📋 STEP 2: Generating HackerOne report...")
+    # Step 2: Generate HackerOne vulnerability report (filtered to medium+)
+    print("\n📋 STEP 2: Compiling vulnerability report...")
     print("=" * 60)
     report = _claude(
         f"make hackerone reports with cwe id and asset from these findings. "
