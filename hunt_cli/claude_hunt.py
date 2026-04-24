@@ -5,6 +5,23 @@ from datetime import datetime
 from . import h1, telegram
 
 
+H1_CORE_INELIGIBLE = """HackerOne Core Ineligible Findings (auto-reject these regardless of severity):
+- Theoretical attacks needing unlikely user interaction (EOL browsers, broken link hijacking, tabnabbing, content spoofing, text injection, physical access, self-XSS, self-DoS)
+- Clickjacking on pages without sensitive actions
+- CSRF on forms without sensitive actions (e.g. logout CSRF)
+- Permissive CORS without demonstrated impact
+- Software version disclosure, banner grabs, descriptive errors/stack traces
+- CSV injection
+- Open redirects without chained impact
+- SSL/TLS config issues, missing SSL pinning, missing jailbreak detection
+- Cookie flag issues (HttpOnly/Secure missing)
+- CSP configuration opinions
+- SPF/DKIM/DMARC issues
+- Rate limiting issues (most)
+- DoS/DDoS, availability-affecting tests, social engineering, physical attacks, noisy spam attacks
+"""
+
+
 def _claude(message, env):
     """Send a message to Claude CLI and return the full output."""
     print(f"\n>>> {message[:80]}{'...' if len(message) > 80 else ''}\n")
@@ -36,8 +53,9 @@ def run_target_hunt(target, scope=None, rules=None):
     hunt_message = (
         f'bug hunting this > "{target}"'
         f'{context}'
+        f'\n\n{H1_CORE_INELIGIBLE}'
         f'\n\nIMPORTANT:'
-        f'\n- Focus on HIGH and CRITICAL severity vulnerabilities only. Low/informational findings (missing headers, server banner disclosure, verbose error messages without real impact, info disclosure with no sensitive data) are NOT acceptable and will be rejected.'
+        f'\n- Focus on HIGH and CRITICAL severity vulnerabilities only. Low/informational findings and anything in the H1 Core Ineligible list above are NOT acceptable.'
         f'\n- Target classes to find: RCE, SQLi, auth bypass, IDOR, SSRF with internal access, XSS with real impact, privilege escalation, account takeover, sensitive data exposure (PII, credentials, tokens), business logic flaws, access control bypass.'
         f'\n- Go DEEP: enumerate endpoints, test auth flows thoroughly, try known CVEs for the stack, test business logic, chain findings for max impact.'
         f'\n- Do not submit findings below Medium severity. If you only find low/informational issues, keep digging.'
@@ -54,9 +72,12 @@ def run_target_hunt(target, scope=None, rules=None):
     print("=" * 60)
     report = _claude(
         f"make hackerone reports with cwe id and asset from these findings. "
-        f"STRICT FILTER: only include Medium/High/Critical severity vulnerabilities. "
-        f"Drop anything Low or Informational. If nothing qualifies, respond with exactly: "
-        f"'NO_QUALIFYING_FINDINGS'.\n\n"
+        f"STRICT FILTERS:\n"
+        f"1. Only include Medium/High/Critical severity with demonstrated impact.\n"
+        f"2. Drop anything Low or Informational.\n"
+        f"3. Drop anything in the HackerOne Core Ineligible list below.\n\n"
+        f"{H1_CORE_INELIGIBLE}\n"
+        f"If nothing qualifies after filtering, respond with exactly: 'NO_QUALIFYING_FINDINGS'.\n\n"
         f"Findings:\n{findings}",
         env,
     )
