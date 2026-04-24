@@ -32,13 +32,16 @@ def _claude(message, env):
         env=env,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"Claude error: {result.stderr.strip()}")
+        err = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+        raise RuntimeError(f"Claude error: {err}")
     return result.stdout.strip()
 
 
 def run_target_hunt(target, scope=None, rules=None):
     """4-step autonomous hunt: open claude → hunt → generate H1 report → send to Telegram."""
-    if not target.startswith(("http://", "https://")):
+    # For wildcard targets like *.example.com, leave raw so Claude enumerates subdomains
+    is_wildcard = "*" in target
+    if not is_wildcard and not target.startswith(("http://", "https://")):
         target = f"https://{target}"
 
     env = os.environ.copy()
@@ -50,8 +53,17 @@ def run_target_hunt(target, scope=None, rules=None):
     if rules:
         context += f"\n\nPROGRAM RULES:\n{rules}"
 
+    wildcard_note = ""
+    if is_wildcard:
+        wildcard_note = (
+            f'\n\nThe target is a WILDCARD scope ({target}). '
+            f'First enumerate live subdomains (use subfinder/crt.sh/dns bruteforce/curl), '
+            f'then pick the most promising live hosts and hunt them.'
+        )
+
     hunt_message = (
         f'bug hunting this > "{target}"'
+        f'{wildcard_note}'
         f'{context}'
         f'\n\n{H1_CORE_INELIGIBLE}'
         f'\n\nIMPORTANT:'
